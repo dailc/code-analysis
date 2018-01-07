@@ -1,0 +1,163 @@
+<!--
+	helloworld中是最简单的一种模拟
+	参考：http://www.cnblogs.com/kidney/p/6052935.html
+-->
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta charset="UTF-8">
+		<meta name="viewport" content="width=device-width,  initial-scale=1.0, minimum-scale=0.5, maximum-scale=2.0, user-scalable=1" />
+		<title></title>
+	</head>
+	<body>
+	    <div id="app">
+	    	  <input type="text" v-model="text"/>
+	    	  {{text}}
+	    </div>
+	    <script>
+	        // 真实的dom节点劫持到内存中的文档块
+	        function nodeToFragment(node, vm) {
+	            var frag = document.createDocumentFragment();
+	            var child;
+	            
+	            while ((child = node.firstChild)) {
+	                // 劫持node的所有子节点
+	                compile(child, vm);
+	                frag.appendChild(child);
+	            }
+	            
+	            return frag;
+	        }
+	        
+	        // 编译模版
+	        function compile(node, vm) {
+	            var reg = /[{]{2}(.*)[}]{2}/;
+	            
+	            if (node.nodeType === 1) {
+	                // 节点类型为元素
+	                var attr = node.attributes;
+	                
+	                // 解析属性
+	                for (var i = 0, len = attr.length; i < len; i++) {
+	                    if (attr[i].nodeName === 'v-model') {
+	                        // 获取v-model绑定的属性名
+	                        var name = attr[i].nodeValue;
+	                        
+	                        if (node.tagName.toLowerCase() === 'input') {
+	                            node.addEventListener('input', function(e) {
+	                                // 给相应的data属性赋值，从而触发set
+	                                vm.data[name] = e.target.value; 
+	                            });
+	                        }
+	                        // 将data的值赋给该node
+	                        node.value = vm.data[name];
+	                        node.removeAttribute('v-model');
+	                    }
+	                }
+	            }
+	            
+	            if (node.nodeType === 3) {
+	                // 节点类型是text
+	                if (reg.test(node.nodeValue)) {
+	                    // 获取正则刚刚匹配的捕获组
+	                    var name = RegExp.$1;
+	                    
+	                    name = name.trim();
+	                    // 将对应的ata赋值给该node
+	                    node.nodeValue = vm.data[name] || '';
+	                    
+	                    new Watcher(vm, node, name);
+	                }
+	            }
+	        }
+	        
+	        function defineReactive(obj, key, val) {
+	            var dep = new Dep();
+	            
+	            Object.defineProperty(obj, key, {
+	                get: function() {
+	                    // 添加订阅者watcher到主题对象Dep
+	                    if (Dep.target) {
+	                        dep.addSub(Dep.target);
+	                    }
+	                    
+	                    return val;
+	                },
+	                set: function(newVal) {
+	                    if (newVal === val) {
+	                        return;
+	                    }
+	                    val = newVal;
+	                    console.log(newVal);
+	                    // 作为发布者，发出通知
+	                    dep.notify();
+	                }
+	            });
+	        }
+	        
+	        function observe(obj, vm) {
+	            Object.keys(obj).forEach(function(key) {
+	                defineReactive(obj, key, obj[key]);
+	            });
+	        }
+	        
+	        function Dep() {
+	            this.subs = [];
+	        }
+	        
+	        Dep.prototype = {
+	            addSub: function(sub) {
+	                this.subs.push(sub);
+	            },
+	            notify: function() {
+	                this.subs.forEach(function(sub) {
+	                    sub.update();
+	                });
+	            }
+	        };
+	        
+	        function Watcher(vm, node, name) {
+	            Dep.target = this;
+	            
+	            this.name = name;
+	            this.node = node;
+	            this.vm = vm;
+	            this.update();
+	            
+	            Dep.target = null;
+	        }
+	        
+	        // 实际上并不建议直接修改原型
+	        Watcher.prototype = {
+	            update: function() {
+	                this.get();
+	                this.node.nodeValue = this.value;
+	            },
+	            // 获取data属性值
+	            get: function() {
+	                // 触发它的get
+	                this.value = this.vm.data[this.name];
+	            }
+	        };
+	        
+	        function Vue(options) {
+	            this.data = options.data;
+	            
+	            observe(this.data, this);
+	            
+	            var id = options.el;
+	            var dom = nodeToFragment(document.getElementById(id), this);
+	            
+	            // 编译完成后
+	            document.getElementById(id).appendChild(dom);
+	        }
+	        
+	        var vm = new Vue({
+	            el: 'app',
+	            data: {
+	                text: 'hello world!'
+	            }
+	        });
+	    </script>
+	</body>
+</html>
