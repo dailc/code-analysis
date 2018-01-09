@@ -1,0 +1,62 @@
+<!--
+    vue1.0模拟
+    参考：https://github.com/DMQ/mvvm
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width,  initial-scale=1.0, minimum-scale=0.5, maximum-scale=2.0, user-scalable=1" />
+    <title>Vue 1.0 Reproduce</title>
+</head>
+<body>
+
+<div id="vue-app">
+    <input type="text" v-model="someStr">
+    <input type="text" v-model="child.someStr">
+    <!-- <p v-class="className" class="abc">
+        {{someStr}}
+        <span v-text="child.someStr"></span>
+    </p> -->
+    <p>{{getHelloWord}}</p>
+    <p v-html="child.htmlStr"></p>
+    <button v-on:click="clickBtn">change model</button>
+</div>
+
+<script src="./observer.js"></script>
+<script src="./watcher.js"></script>
+<script src="./compile.js"></script>
+<script src="./vue.js"></script>
+<script>
+    var vm = new Vue({
+        el: '#vue-app',
+        data: {
+            someStr: 'hello ',
+            className: 'btn',
+            htmlStr: '<span style="color: #f00;">red</span>',
+            child: {
+                someStr: 'World !'
+            }
+        },
+
+        computed: {
+            getHelloWord: function() {
+                return this.someStr + this.child.someStr;
+            }
+        },
+
+        methods: {
+            clickBtn: function(e) {
+                var randomStrArr = ['childOne', 'childTwo', 'childThree'];
+                this.child.someStr = randomStrArr[parseInt(Math.random() * 3)];
+            }
+        }
+    });
+
+    vm.$watch('child.someStr', function() {
+        console.log(arguments);
+    });
+</script>
+
+</body>
+</html>
