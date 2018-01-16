@@ -1,7 +1,8 @@
 <!--
 	对应链接：
-	http://ife.baidu.com/course/detail/id/20
-	加入了回调功能，同时以前就支持深层次递归的
+	http://ife.baidu.com/course/detail/id/21
+	加入了回调功能，同时以前就支持深层次递归的，支持深层次的数据变话后监听
+	同时思路改成：event
 -->
 <!DOCTYPE html>
 <html>
@@ -9,17 +10,22 @@
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width,  initial-scale=1.0, minimum-scale=0.5, maximum-scale=2.0, user-scalable=1" />
-        <title>动态数据绑定（二）发布订阅模式</title>
+        <title>动态数据绑定（三）深层次数据变化监听</title>
     </head>
 
     <body>
 
         <script>
-            function Observer(data) {
+            function Observer(data, parent, dataKeyInParent) {
+                if (parent && parent instanceof Observer) {
+                    // parent必须也是一个Observer才有效
+                    this.parent = parent;
+                    this.dataKeyInParent = dataKeyInParent;
+                }
                 this.data = data;
                 this.walk(this.data);
-                // 关联依赖
-                this.dep = new Dep();
+                // 事件
+                this.events = new Events();
             }
 
             Observer.prototype.walk = function(obj) {
@@ -31,7 +37,7 @@
 
                         // 递归
                         if (typeof val === 'object') {
-                            new Observer(val);
+                            new Observer(val, this, key);
                         }
                         this.convert(key, val);
                     }
@@ -51,28 +57,41 @@
                     },
                     set: function(newVal) {
                         console.log('你访问了：' + key + '，新的值为：' + newVal);
-                        // 通知改变
-                        observer.dep.notify(key, newVal);
+
                         if (newVal === val) {
                             return;
                         }
 
                         val = newVal;
+
+                        // 通知改变
+                        observer.change(key, newVal);
                     }
                 });
             };
 
+            Observer.prototype.change = function(key, val) {
+                this.events.emit(key, val);
+                // 向父对象进行冒泡
+                this.parent && this.parent.subChange(this.dataKeyInParent, this.data);
+            };
+
+            Observer.prototype.subChange = function(dataKeyInParent, data) {
+                // 捕获到冒泡信息
+                // 先找到这个data，然后再通知它的 key
+                this.change(dataKeyInParent, data);
+            };
 
             Observer.prototype.$watch = function(key, callback) {
-                this.dep.addWatcher(key, callback);
+                this.events.on(key, callback);
             };
 
             // watcher和Observer之间关联的关键
-            function Dep() {
+            function Events() {
                 this.watchers = {};
             }
 
-            Dep.prototype.addWatcher= function(key, callback) {
+            Events.prototype.on = function(key, callback) {
                 if (!this.watchers[key]) {
                     this.watchers[key] = [callback];
                 } else {
@@ -80,12 +99,13 @@
                 }
             };
 
-            Dep.prototype.notify = function(key, newVal) {
+            Events.prototype.emit = function(key, newVal) {
                 const callbacks = this.watchers[key];
-                
+
                 if (!callbacks) {
                     return;
                 }
+                // 只要有一个阻止冒泡，就阻止
                 callbacks.forEach(function(callback) {
                     callback(newVal);
                 });
@@ -98,7 +118,11 @@
 
             let app2 = new Observer({
                 university: 'bupt',
-                major: 'computer'
+                major: 'computer',
+                name: {
+                    firstName: 'shaofeng',
+                    lastName: 'liang'
+                }
             });
 
             // 需要实现 $watch 这个 API
@@ -109,6 +133,10 @@
                 console.log('监听2：我的年纪变了，现在已经是：' + age + '岁了');
             });
 
+            app2.$watch('name', function(name) {
+                console.log('名字某部分发生变化：' + JSON.stringify(name));
+            });
+
             app1.data.name;
             app1.data.age = 100;
             app2.data.university;
@@ -116,6 +144,9 @@
 
             console.log(app1.data.age);
             console.log(app2.data.major);
+
+            app2.data.name.firstName = 'hahaha';
+            app2.data.name.lastName = 'blablabla';
         </script>
     </body>
 

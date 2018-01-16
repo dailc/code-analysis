@@ -1,0 +1,250 @@
+<!--
+	对应链接：
+	http://ife.baidu.com/course/detail/id/24
+	实现vue的简单数据动态绑定，使用数据劫持大法
+	只考虑了数据变动->dom变动
+	主要用的了发布-订阅模式
+-->
+<!DOCTYPE html>
+<html>
+
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width,  initial-scale=1.0, minimum-scale=0.5, maximum-scale=2.0, user-scalable=1" />
+        <title>动态数据绑定（五）数据动态绑定</title>
+    </head>
+
+    <body>
+        <button id="change-value">改变节点值</button>
+        <!-- 页面中原本的 html 模板片段 -->
+        <div id="app">
+            <p>标题：{{hello}}</p>
+            <p>姓名：{{user.name}}</p>
+            <p>年龄：{{user.age}}</p>
+        </div>
+
+        <script>
+            function Observer(data) {
+                this.data = data;
+                this.walk(this.data);
+            }
+
+            Observer.prototype.walk = function(obj) {
+                let val;
+
+                for (let key in obj) {
+                    if (Object.hasOwnProperty.call(obj, key)) {
+                        val = obj[key];
+
+                        // 递归
+                        if (typeof val === 'object') {
+                            new Observer(val);
+                        }
+                        this.convert(key, val);
+                    }
+                }
+            };
+
+            Observer.prototype.convert = function(key, val) {
+                let dep = new Dep();
+
+                Object.defineProperty(this.data, key, {
+                    configurable: true,
+                    enumerable: true,
+                    get: function() {
+                        // console.log('你访问了：' + key);
+                        
+                        // target很关键，决定每次的watcher是什么
+                        if (Dep.target) {
+                            // 添加对于的dom watcher
+                            dep.addSub(Dep.target);
+                        }
+
+                        return val;
+                    },
+                    set: function(newVal) {
+                        console.log('你访问了：' + key + '，新的值为：' + newVal);
+
+                        if (newVal === val) {
+                            return;
+                        }
+                        val = newVal;
+                        // 通知改变，对应的domwatcher会更新
+                        dep.notify();
+                    }
+                });
+            };
+            
+            // 每次初始化生成Watcher时确定一次target
+            function Watcher(vm, node, namespace) {
+                Dep.target = this;
+                
+                this.vm = vm;
+                this.node = node;
+                this.namespace = namespace;
+                
+                // update中，先触发vm中的get，从而将本watcher加入dep
+                // 然后再设置对应dom节点的值
+                this.update();
+                
+                Dep.target = null;
+            }
+            
+            
+            Watcher.prototype.get = function() {
+                // 触发监听的vm对应name的get
+                // 这样做的后果是：父对象变动，子对象也会收到监听
+                this.value = getValueByNamespace(this.vm, this.namespace);
+            };
+            
+            Watcher.prototype.update = function() {
+                this.get();
+                this.node.nodeValue = this.value;
+                console.warn('更改节点值:' + this.value);
+            };
+            
+            // 通过依赖来关联
+            function Dep() {
+                this.subs = [];
+            }
+            
+            // 简单版本下，每次开始绑定时，会字段去添加sub的
+            // 每一个sub都是一个watcher
+            Dep.prototype.addSub = function(sub) {
+                this.subs.push(sub);
+            };
+            
+            Dep.prototype.notify = function() {
+                this.subs.forEach(function(sub) {
+                    // 调用watcher的update
+                    sub.update();
+                })
+            };
+            
+            // 每次绑定时的动态辨识target
+            Dep.target = null;
+            
+
+            function Vue(options) {
+                this.el = options.el;
+
+                if (typeof this.el === 'string') {
+                    this.el = document.querySelector(this.el);
+                }
+                this.data = options.data;
+                
+                // 监听数据
+                new Observer(this.data);
+                // 劫持节点，数据变动，节点也变动
+                this.hijackNode();
+            }
+            
+            // 劫持对应的dom
+            Vue.prototype.hijackNode = function() {
+                let fragment = nodeToFragment(this.el, this)
+                
+                this.el.appendChild(fragment);
+            };
+            
+            // 根据user.name这种命名空间在data中获取数据
+            function getValueByNamespace(vm, namespace) {
+                if (!namespace) {
+                    return null;
+                }
+                const namespaceArr = namespace.split('.');
+                const len = namespaceArr.length;
+                let parent = vm.data;
+                let target;
+
+                for (let i = 0; i < len && parent; i++) {
+                    const key = namespaceArr[i];
+
+                    target = parent[key];
+                    parent = target;
+                }
+
+                return target;
+            }
+
+            // 真实的dom节点劫持到内存中的文档块
+            function nodeToFragment(node, vm) {
+                const frag = document.createDocumentFragment();
+                let child;
+                
+                // 每次的child都被添加到frag里了
+                while ((child = node.firstChild)) {
+                    // 劫持node的所有子节点
+                    compile(child, vm);
+                    frag.appendChild(child);
+                }
+                
+                return frag;
+            }
+            
+            function compile(node, vm) {
+                const reg = /[{]{2}(.*)[}]{2}/;
+                
+                // 目前只考虑文本节点
+                if (node.nodeType === 1) {
+                    // 节点类型为元素，目前只获取文本
+                    // 递归查询文本节点,childNdoes包含空节点，文本节点
+                    // children只会确保是element的
+                    const childNodes = node.childNodes;
+                    
+                    if (childNodes) {
+                        const len = childNodes.length;
+                    
+                        for (let i = 0; i < len; i++) {
+                            compile(childNodes[i], vm);
+                        }
+                    }
+                }
+                
+                // 目前只考虑文本节点
+                if (node.nodeType === 3) {
+                    // 节点类型是text
+                    if (reg.test(node.nodeValue)) {
+                        // 获取正则刚刚匹配的捕获组
+                        const namespace = RegExp.$1.trim();
+                        
+                        // 将对应的ata赋值给该node
+                        node.nodeValue = getValueByNamespace(vm, namespace) || '';
+                        
+                        new Watcher(vm, node, namespace);
+                    }
+                }
+            }
+
+            let app = new Vue({
+                el: '#app',
+                data: {
+                    hello: 'hello vue',
+                    user: {
+                        name: 'youngwind',
+                        age: 25
+                    },
+                    school: 'bupt',
+                    major: 'computer'
+                }
+            });
+            
+            let step = 0;
+            document.getElementById('change-value').addEventListener('click', function() {
+                if (step === 0) {
+                    app.data.hello += '1';
+                }
+                if (step === 1) {
+                    app.data.school += '1';
+                }
+                if (step === 2) {
+                    app.data.user.name += '1';
+                }
+                step++;
+                
+                step %= 3;
+            });
+            
+        </script>
+    </body>
+
+</html>

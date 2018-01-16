@@ -1,0 +1,122 @@
+<!--
+	对应链接：
+	http://ife.baidu.com/course/detail/id/20
+	加入了回调功能，同时以前就支持深层次递归的
+-->
+<!DOCTYPE html>
+<html>
+
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width,  initial-scale=1.0, minimum-scale=0.5, maximum-scale=2.0, user-scalable=1" />
+        <title>动态数据绑定（二）增加事件监听</title>
+    </head>
+
+    <body>
+
+        <script>
+            function Observer(data) {
+                this.data = data;
+                this.walk(this.data);
+                // 关联依赖
+                this.dep = new Dep();
+            }
+
+            Observer.prototype.walk = function(obj) {
+                let val;
+
+                for (let key in obj) {
+                    if (Object.hasOwnProperty.call(obj, key)) {
+                        val = obj[key];
+
+                        // 递归
+                        if (typeof val === 'object') {
+                            new Observer(val);
+                        }
+                        this.convert(key, val);
+                    }
+                }
+            };
+
+            Observer.prototype.convert = function(key, val) {
+                var observer = this;
+
+                Object.defineProperty(this.data, key, {
+                    configurable: true,
+                    enumerable: true,
+                    get: function() {
+                        console.log('你访问了：' + key);
+
+                        return val;
+                    },
+                    set: function(newVal) {
+                        console.log('你访问了：' + key + '，新的值为：' + newVal);
+                        // 通知改变
+                        observer.dep.notify(key, newVal);
+                        if (newVal === val) {
+                            return;
+                        }
+
+                        val = newVal;
+                    }
+                });
+            };
+
+
+            Observer.prototype.$watch = function(key, callback) {
+                this.dep.addWatcher(key, callback);
+            };
+
+            // watcher和Observer之间关联的关键
+            function Dep() {
+                this.watchers = {};
+            }
+
+            Dep.prototype.addWatcher= function(key, callback) {
+                if (!this.watchers[key]) {
+                    this.watchers[key] = [callback];
+                } else {
+                    this.watchers[key].push(callback);
+                }
+            };
+
+            Dep.prototype.notify = function(key, newVal) {
+                const callbacks = this.watchers[key];
+                
+                if (!callbacks) {
+                    return;
+                }
+                callbacks.forEach(function(callback) {
+                    callback(newVal);
+                });
+            };
+
+            let app1 = new Observer({
+                name: 'youngwind',
+                age: 25
+            });
+
+            let app2 = new Observer({
+                university: 'bupt',
+                major: 'computer'
+            });
+
+            // 需要实现 $watch 这个 API
+            app1.$watch('age', function(age) {
+                console.log('监听1：我的年纪变了，现在已经是：' + age + '岁了');
+            });
+            app1.$watch('age', function(age) {
+                console.log('监听2：我的年纪变了，现在已经是：' + age + '岁了');
+            });
+
+            app1.data.name;
+            app1.data.age = 100;
+            app2.data.university;
+            app2.data.major = 'science';
+
+            console.log(app1.data.age);
+            console.log(app2.data.major);
+        </script>
+    </body>
+
+</html>

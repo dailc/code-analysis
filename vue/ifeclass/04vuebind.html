@@ -1,0 +1,82 @@
+<!--
+	对应链接：
+	http://ife.baidu.com/course/detail/id/22
+	实现vue的数据绑定，此题尚未要求动态绑定
+-->
+<!DOCTYPE html>
+<html>
+
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width,  initial-scale=1.0, minimum-scale=0.5, maximum-scale=2.0, user-scalable=1" />
+        <title>动态数据绑定（四）数据单向绑定</title>
+    </head>
+
+    <body>
+        <!-- 页面中原本的 html 模板片段 -->
+        <div id="app">
+            <p>标题：{{hello}}</p>
+            <p>姓名：{{user.name}}</p>
+            <p>年龄：{{user.age}}</p>
+        </div>
+
+        <script>
+            function Vue(options) {
+                this.el = options.el;
+
+                if (typeof this.el === 'string') {
+                    this.el = document.querySelector(this.el);
+                }
+                this.data = options.data;
+                this.compile();
+            }
+
+            // 根据user.name这种命名空间在data中获取数据
+            Vue.prototype.getValueByNamespace = function(namespace) {
+                if (!namespace) {
+                    return null;
+                }
+                const namespaceArr = namespace.split('.');
+                const len = namespaceArr.length;
+                let parent = this.data;
+                let target;
+
+                for (let i = 0; i < len && parent; i++) {
+                    const key = namespaceArr[i];
+
+                    target = parent[key];
+                    parent = target;
+                }
+
+                return target;
+            };
+
+            Vue.prototype.compile = function() {
+                const vm = this;
+                const variableReg = /\{\{([^{}]*)\}\}/g;
+                const compileTemplate = this.el.innerHTML;
+                const finalHtml = compileTemplate.replace(variableReg, function($0, $1) {
+                    // $1的示例：hello,user.name
+                    const value = vm.getValueByNamespace($1) || '';
+
+                    return typeof value === 'string' ? value : JSON.stringify(value);
+                });
+
+                // 最简单的全部覆盖渲染
+                this.el.innerHTML = finalHtml;
+            };
+
+            let app = new Vue({
+                el: '#app',
+                data: {
+                    hello: 'hello vue',
+                    user: {
+                        name: 'youngwind',
+                        age: 25
+                    }
+                }
+            });
+        </script>
+    </body>
+
+</html>
